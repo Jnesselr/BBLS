@@ -35,6 +35,7 @@ public:
 private:
 	static BBLSNode* createNode(unsigned int key, NodeType type);
 	bool simplifyGates();
+	void replaceInputs(unsigned int oldInput, unsigned int newInput);
 	map<unsigned int, BBLSNode*> map;
 };
 
