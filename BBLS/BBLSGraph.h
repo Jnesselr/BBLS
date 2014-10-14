@@ -3,6 +3,7 @@
 #include<fstream>
 #include<map>
 using std::ifstream;
+using std::ofstream;
 using std::map;
 
 enum NodeType {
@@ -27,7 +28,8 @@ public:
 	BBLSGraph();
 	~BBLSGraph();
 
-	void BBLSGraph::readGraph(ifstream &fin);
+	void readGraph(ifstream &fin);
+	void write(ofstream &fout);
 
 private:
 	static BBLSNode* createNode(unsigned int key, NodeType type);

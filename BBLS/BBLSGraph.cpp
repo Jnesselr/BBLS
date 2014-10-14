@@ -1,8 +1,6 @@
 #include "BBLSGraph.h"
 #include <iostream>
-using std::cout;
 using std::endl;
-
 
 BBLSGraph::BBLSGraph()
 {
@@ -14,9 +12,7 @@ BBLSGraph::~BBLSGraph()
 	for (auto itr = map.begin(); itr != map.end(); itr++) {
 		delete itr->second;
 	}
-	cout << map.size() << endl;
 	map.clear();
-	cout << map.size() << endl;
 }
 
 BBLSNode* BBLSGraph::createNode(unsigned int key, NodeType type) {
@@ -77,6 +73,42 @@ void BBLSGraph::readGraph(ifstream &fin) {
 
 		if (node != NULL) {
 			map[keyIndex] = node;
+		}
+	}
+	fin.close();
+}
+
+void BBLSGraph::write(ofstream &fout) {
+	for (auto itr = map.begin(); itr != map.end(); itr++) {
+		fout << itr->first << "\t";
+		BBLSNode* node = itr->second;
+		switch (node->type) {
+		case ConstantWire:
+			fout << "C\t";
+			fout << node->inputLeft << endl;
+			break;
+		case VariableWire:
+			fout << "W" << endl;
+			break;
+		case AndGate:
+			fout << "A\t";
+			fout << node->inputLeft << "\t";
+			fout << node->inputRight << endl;
+			break;
+		case OrGate:
+			fout << "O\t";
+			fout << node->inputLeft << "\t";
+			fout << node->inputRight << endl;
+			break;
+		case XorGate:
+			fout << "X\t";
+			fout << node->inputLeft << "\t";
+			fout << node->inputRight << endl;
+			break;
+		case NotGate:
+			fout << "N\t";
+			fout << node->inputLeft << endl;
+			break;
 		}
 	}
 }

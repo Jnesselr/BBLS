@@ -21,5 +21,14 @@ int main(int argc, char* argv[]) {
 	BBLSGraph graph;
 	graph.readGraph(fin);
 
+	ofstream fout;
+	do {
+		cout << "Output file name: ";
+		cin >> fileName;
+		fout.open(fileName);
+	} while (fout.fail());
+
+	graph.write(fout);
+
 	return 0;
 }
