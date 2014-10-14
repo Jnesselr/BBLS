@@ -36,6 +36,7 @@ void BBLSGraph::readGraph(istream &fin) {
 			node = createNode(keyIndex, ConstantWire);
 			fin >> leftIndex;
 			node->inputLeft = leftIndex;
+			notOutputs.push_back(leftIndex);
 			break;
 		case 'W':
 			node = createNode(keyIndex, VariableWire);

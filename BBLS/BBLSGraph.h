@@ -2,9 +2,11 @@
 
 #include<iostream>
 #include<map>
+#include<vector>
 using std::istream;
 using std::ostream;
 using std::map;
+using std::vector;
 
 enum NodeType {
 	ConstantWire,
@@ -37,5 +39,6 @@ private:
 	bool simplifyGates();
 	void replaceInputs(unsigned int oldInput, unsigned int newInput);
 	map<unsigned int, BBLSNode*> map;
+	vector<unsigned int> notOutputs;
 };
 
