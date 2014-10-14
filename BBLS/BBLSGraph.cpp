@@ -22,7 +22,7 @@ BBLSNode* BBLSGraph::createNode(unsigned int key, NodeType type) {
 	return node;
 }
 
-void BBLSGraph::readGraph(ifstream &fin) {
+void BBLSGraph::readGraph(istream &fin) {
 	unsigned int keyIndex;
 	char type;
 	unsigned int leftIndex, rightIndex;
@@ -75,10 +75,9 @@ void BBLSGraph::readGraph(ifstream &fin) {
 			map[keyIndex] = node;
 		}
 	}
-	fin.close();
 }
 
-void BBLSGraph::write(ofstream &fout) {
+void BBLSGraph::write(ostream &fout) {
 	for (auto itr = map.begin(); itr != map.end(); itr++) {
 		fout << itr->first << "\t";
 		BBLSNode* node = itr->second;

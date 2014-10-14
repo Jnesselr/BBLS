@@ -20,6 +20,7 @@ int main(int argc, char* argv[]) {
 
 	BBLSGraph graph;
 	graph.readGraph(fin);
+	fin.close();
 
 	graph.simplify();
 
@@ -30,7 +31,8 @@ int main(int argc, char* argv[]) {
 		fout.open(fileName);
 	} while (fout.fail());
 
-	graph.write(fout);
+	graph.write(cout);
+	fout.close();
 
 	return 0;
 }

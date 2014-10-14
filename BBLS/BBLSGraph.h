@@ -1,9 +1,9 @@
 #pragma once
 
-#include<fstream>
+#include<iostream>
 #include<map>
-using std::ifstream;
-using std::ofstream;
+using std::istream;
+using std::ostream;
 using std::map;
 
 enum NodeType {
@@ -28,8 +28,8 @@ public:
 	BBLSGraph();
 	~BBLSGraph();
 
-	void readGraph(ifstream &fin);
-	void write(ofstream &fout);
+	void readGraph(istream &fin);
+	void write(ostream &fout);
 	bool simplify();
 
 private:
