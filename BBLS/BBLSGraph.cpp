@@ -148,6 +148,9 @@ bool BBLSGraph::simplifyGates() {
 					node->type = ConstantWire;
 					node->inputLeft = newState;
 				}
+				else if (left->type == NotGate) {
+					replaceInputs(node->output, left->inputLeft);
+				}
 			}
 		}
 		else if (left != NULL && right != NULL) {
@@ -169,8 +172,7 @@ bool BBLSGraph::simplifyGates() {
 						node->inputRight = 0;
 					}
 					else {
-						node->type = VariableWire;
-						node->inputLeft = left->inputLeft;
+						replaceInputs(node->output, node->inputRight);
 					}
 				}
 				else if (right->type == ConstantWire) {
@@ -180,9 +182,7 @@ bool BBLSGraph::simplifyGates() {
 						node->inputRight = 0;
 					}
 					else {
-						node->type = VariableWire;
-						node->inputLeft = right->inputLeft;
-						node->inputRight = 0;
+						replaceInputs(node->output, node->inputLeft);
 					}
 				}
 			}
@@ -198,7 +198,7 @@ bool BBLSGraph::simplifyGates() {
 				}
 				else if (left->type == ConstantWire) {
 					if (left->inputLeft == 0) {
-						replaceInputs(node->inputLeft, right->inputLeft);
+						replaceInputs(node->output, node->inputRight);
 					}
 					else {
 						node->type = ConstantWire;
@@ -208,7 +208,7 @@ bool BBLSGraph::simplifyGates() {
 				}
 				else if (right->type == ConstantWire) {
 					if (right->inputLeft == 0) {
-						replaceInputs(node->inputLeft, left->inputLeft);
+						replaceInputs(node->output, node->inputLeft);
 					}
 					else {
 						node->type = ConstantWire;
@@ -229,21 +229,21 @@ bool BBLSGraph::simplifyGates() {
 				}
 				else if (left->type == ConstantWire) {
 					if (left->inputLeft == 0) {
-						replaceInputs(node->inputLeft, right->inputLeft);
+						replaceInputs(node->output, node->inputRight);
 					}
 					else {
 						node->type = NotGate;
-						node->inputLeft = right->inputLeft;
+						node->inputLeft = node->inputLeft;
 						node->inputRight = 0;
 					}
 				}
 				else if (right->type == ConstantWire) {
 					if (right->inputLeft == 0) {
-						replaceInputs(node->inputLeft, left->inputLeft);
+						replaceInputs(node->output, node->inputLeft);
 					}
 					else {
 						node->type = NotGate;
-						node->inputLeft = left->inputLeft;
+						node->inputLeft = node->inputLeft;
 						node->inputRight = 0;
 					}
 				}
