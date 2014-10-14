@@ -98,8 +98,9 @@ void BBLSGraph::readGraph(istream &fin) {
 }
 
 void BBLSGraph::write(ostream &fout) {
-	auto itr = map.begin();
-	while (itr != map.end()) {
+	fout << "--INPUT--" << std::endl;
+
+	for (auto itr = map.begin(); itr != map.end(); itr++) {
 		fout << itr->first << "\t";
 		BBLSNode* node = itr->second;
 		switch (node->type) {
@@ -131,11 +132,12 @@ void BBLSGraph::write(ostream &fout) {
 			break;
 		}
 
-		itr++;
+		fout << std::endl;
+	}
 
-		if (itr != map.end()) {
-			fout << std::endl;
-		}
+	fout << std::endl << "--OUTPUT--";
+	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
+		fout << std::endl << *itr;
 	}
 }
 
@@ -152,10 +154,9 @@ bool BBLSGraph::simplify() {
 
 		if (continueSimplifying)
 			anySimplified = true;
+		std::cout << "Went from " << originalEntries << " to " << map.size() << " saving ";
+		std::cout << (originalEntries - map.size()) << " entries." << std::endl;
 	} while (continueSimplifying);
-
-	std::cout << "Went from " << originalEntries << " to " << map.size() << " saving ";
-	std::cout << (originalEntries - map.size()) << " entries." << std::endl;
 
 	return anySimplified;
 }
@@ -182,6 +183,7 @@ bool BBLSGraph::simplifyGates() {
 					node->inputLeft = newState;
 				}
 				else if (left->type == NotGate) {
+					somethingChanged = true;
 					replaceInputs(node->output, left->inputLeft);
 				}
 			}
@@ -205,6 +207,7 @@ bool BBLSGraph::simplifyGates() {
 						node->inputRight = 0;
 					}
 					else {
+						somethingChanged = true;
 						replaceInputs(node->output, node->inputRight);
 					}
 				}
@@ -215,8 +218,13 @@ bool BBLSGraph::simplifyGates() {
 						node->inputRight = 0;
 					}
 					else {
+						somethingChanged = true;
 						replaceInputs(node->output, node->inputLeft);
 					}
+				}
+				else if (node->inputLeft == node->inputRight) {
+					somethingChanged = true;
+					replaceInputs(node->output, node->inputLeft);
 				}
 			}
 			else if (node->type == OrGate) {
@@ -231,6 +239,7 @@ bool BBLSGraph::simplifyGates() {
 				}
 				else if (left->type == ConstantWire) {
 					if (left->inputLeft == 0) {
+						somethingChanged = true;
 						replaceInputs(node->output, node->inputRight);
 					}
 					else {
@@ -241,6 +250,7 @@ bool BBLSGraph::simplifyGates() {
 				}
 				else if (right->type == ConstantWire) {
 					if (right->inputLeft == 0) {
+						somethingChanged = true;
 						replaceInputs(node->output, node->inputLeft);
 					}
 					else {
@@ -248,6 +258,10 @@ bool BBLSGraph::simplifyGates() {
 						node->inputLeft = 1;
 						node->inputRight = 0;
 					}
+				}
+				else if (node->inputLeft == node->inputRight) {
+					somethingChanged = true;
+					replaceInputs(node->output, node->inputLeft);
 				}
 			}
 			else if (node->type == XorGate) {
@@ -262,6 +276,7 @@ bool BBLSGraph::simplifyGates() {
 				}
 				else if (left->type == ConstantWire) {
 					if (left->inputLeft == 0) {
+						somethingChanged = true;
 						replaceInputs(node->output, node->inputRight);
 					}
 					else {
@@ -272,12 +287,18 @@ bool BBLSGraph::simplifyGates() {
 				}
 				else if (right->type == ConstantWire) {
 					if (right->inputLeft == 0) {
+						somethingChanged = true;
 						replaceInputs(node->output, node->inputLeft);
 					}
 					else {
 						node->type = NotGate;
 						node->inputRight = 0;
 					}
+				}
+				else if (node->inputLeft == node->inputRight) {
+					node->type = ConstantWire;
+					node->inputLeft = 0;
+					node->inputRight = 0;
 				}
 			}
 		}
