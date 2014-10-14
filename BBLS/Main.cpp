@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
 		fout.open(fileName);
 	} while (fout.fail());
 
-	graph.write(cout);
+	graph.write(fout);
 	fout.close();
 
 	return 0;

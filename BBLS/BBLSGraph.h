@@ -3,6 +3,8 @@
 #include<iostream>
 #include<map>
 #include<vector>
+#include <set>
+using std::set;
 using std::istream;
 using std::ostream;
 using std::map;
@@ -37,8 +39,10 @@ public:
 private:
 	static BBLSNode* createNode(unsigned int key, NodeType type);
 	bool simplifyGates();
+	bool removeUnused();
 	void replaceInputs(unsigned int oldInput, unsigned int newInput);
+	bool isUsed(unsigned int input);
 	map<unsigned int, BBLSNode*> map;
-	vector<unsigned int> notOutputs;
+	set<unsigned int> outputs;
 };
 
