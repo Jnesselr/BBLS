@@ -21,6 +21,8 @@ int main(int argc, char* argv[]) {
 	BBLSGraph graph;
 	graph.readGraph(fin);
 
+	graph.simplify();
+
 	ofstream fout;
 	do {
 		cout << "Output file name: ";

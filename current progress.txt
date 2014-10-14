@@ -1,0 +1,45 @@
+1. Reading data from a file
+
+1	C	0
+2	W
+3	A	1	2
+4	O	1	3
+5	C	1
+6	X	4	5
+7	N	6
+
+W = Wire with variable state
+C = constant with known state
+A = And gate
+O = Or gate
+X = Xor gate
+N = Not gate
+
+make sure there's no loops
+
+2. Multi-step process (Repeat until nothing changes
+a) Simplify individual gates (change to a not or eliminate)
+b) Simplify pairs of gates
+
+3. Write to new file
+a) Display how many gates were removed
+b) How many constant wires
+c) How many total wires
+
+And		|	
+0	0	|	0
+0	1	|	0
+1	0	|	0
+1	1	|	1
+
+Or		|
+0	0	|	0
+0	1	|	1
+1	0	|	1
+1	1	|	1
+
+Xor		|
+0	0	|	0
+0	1	|	1
+1	0	|	1
+1	1	|	0

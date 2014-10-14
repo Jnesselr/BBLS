@@ -112,3 +112,154 @@ void BBLSGraph::write(ofstream &fout) {
 		}
 	}
 }
+
+bool BBLSGraph::simplify() {
+	bool anySimplified = false;
+	bool continueSimplifying = false;
+	do {
+		continueSimplifying = false;
+
+		continueSimplifying |= simplifyGates();
+
+		if (continueSimplifying)
+			anySimplified = true;
+	} while (continueSimplifying);
+	return anySimplified;
+}
+
+bool BBLSGraph::simplifyGates() {
+	bool somethingChanged = false;
+	for (auto itr = map.begin(); itr != map.end(); itr++) {
+		BBLSNode* node = itr->second;
+		NodeType originalType = node->type;
+		BBLSNode* left = NULL;
+		BBLSNode* right = NULL;
+		if (node->inputLeft != 0 && node->type != ConstantWire)
+			left = map[node->inputLeft];
+		if (node->inputRight != 0)
+			right = map[node->inputRight];
+		
+		if (left != NULL && right == NULL) {
+			// ConstantWire and NotGate
+			if (node->type == NotGate) {
+				if (left->type == ConstantWire) {
+					// We can simplify this to the oposite of this constant
+					unsigned int newState = (left->inputLeft == 0 ? 1 : 0);
+					node->type = ConstantWire;
+					node->inputLeft = newState;
+				}
+			}
+		}
+		else if (left != NULL && right != NULL) {
+			// And, Or, and Xor gates
+			if (node->type == AndGate) {
+				if (left->type == ConstantWire && right->type == ConstantWire) {
+					unsigned int newState = 0;
+					if (left->inputLeft == 1 && right->inputLeft == 1) {
+						newState = 1;
+					}
+					node->type = ConstantWire;
+					node->inputLeft = newState;
+					node->inputRight = 0;
+				}
+				else if (left->type == ConstantWire) {
+					if (left->inputLeft == 0) {
+						node->type = ConstantWire;
+						node->inputLeft = 0;
+						node->inputRight = 0;
+					}
+					else {
+						node->type = VariableWire;
+						node->inputLeft = left->inputLeft;
+					}
+				}
+				else if (right->type == ConstantWire) {
+					if (right->inputLeft == 0) {
+						node->type = ConstantWire;
+						node->inputLeft = 0;
+						node->inputRight = 0;
+					}
+					else {
+						node->type = VariableWire;
+						node->inputLeft = right->inputLeft;
+						node->inputRight = 0;
+					}
+				}
+			}
+			else if (node->type == OrGate) {
+				if (left->type == ConstantWire && right->type == ConstantWire) {
+					unsigned int newState = 0;
+					if (left->inputLeft == 1 || right->inputLeft == 1) {
+						newState = 1;
+					}
+					node->type = ConstantWire;
+					node->inputLeft = newState;
+					node->inputRight = 0;
+				}
+				else if (left->type == ConstantWire) {
+					if (left->inputLeft == 0) {
+						node->type = VariableWire;
+						node->inputLeft = right->inputLeft;
+						node->inputRight = 0;
+					}
+					else {
+						node->type = ConstantWire;
+						node->inputLeft = 1;
+						node->inputRight = 0;
+					}
+				}
+				else if (right->type == ConstantWire) {
+					if (right->inputLeft == 0) {
+						node->type = VariableWire;
+						node->inputLeft = left->inputLeft;
+						node->inputRight = 0;
+					}
+					else {
+						node->type = ConstantWire;
+						node->inputLeft = 1;
+						node->inputRight = 0;
+					}
+				}
+			}
+			else if (node->type == XorGate) {
+				if (left->type == ConstantWire && right->type == ConstantWire) {
+					unsigned int newState = 0;
+					if (left->inputLeft != right->inputLeft) {
+						newState = 1;
+					}
+					node->type = ConstantWire;
+					node->inputLeft = newState;
+					node->inputRight = 0;
+				}
+				else if (left->type == ConstantWire) {
+					if (left->inputLeft == 0) {
+						node->type = VariableWire;
+						node->inputLeft = right->inputLeft;
+						node->inputRight = 0;
+					}
+					else {
+						node->type = NotGate;
+						node->inputLeft = right->inputLeft;
+						node->inputRight = 0;
+					}
+				}
+				else if (right->type == ConstantWire) {
+					if (right->inputLeft == 0) {
+						node->type = VariableWire;
+						node->inputLeft = left->inputLeft;
+						node->inputRight = 0;
+					}
+					else {
+						node->type = NotGate;
+						node->inputLeft = left->inputLeft;
+						node->inputRight = 0;
+					}
+				}
+			}
+		}
+		if (originalType != node->type) {
+			somethingChanged = true;
+		}
+	}
+	return somethingChanged;
+}

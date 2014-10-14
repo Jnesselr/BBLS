@@ -30,9 +30,11 @@ public:
 
 	void readGraph(ifstream &fin);
 	void write(ofstream &fout);
+	bool simplify();
 
 private:
 	static BBLSNode* createNode(unsigned int key, NodeType type);
+	bool simplifyGates();
 	map<unsigned int, BBLSNode*> map;
 };
 
