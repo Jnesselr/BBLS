@@ -94,7 +94,7 @@ void BBLSGraph::readGraph(istream &fin) {
 		outputs.erase(*itr);
 	}
 
-	std::cout << "We have " << outputs.size() << " outputs remaining" << std::endl;
+	std::cout << "We have " << outputs.size() << " outputs." << std::endl << std::endl;
 }
 
 void BBLSGraph::write(ostream &fout) {

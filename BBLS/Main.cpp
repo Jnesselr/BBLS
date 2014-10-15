@@ -22,8 +22,6 @@ int main(int argc, char* argv[]) {
 	graph.readGraph(fin);
 	fin.close();
 
-	graph.simplify();
-
 	ofstream fout;
 	do {
 		cout << "Output file name: ";
@@ -31,6 +29,9 @@ int main(int argc, char* argv[]) {
 		fout.open(fileName);
 	} while (fout.fail());
 
+	graph.simplify();
+
+	cout << "Writing file..." << endl;
 	graph.write(fout);
 	fout.close();
 
