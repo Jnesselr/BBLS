@@ -26,8 +26,8 @@ public class Main {
         for(; numCurrent < numConstant; numCurrent++) {
             writer.write(String.valueOf(numCurrent +1));
             writer.write("\tC\t");
-            //writer.write(String.valueOf(random.nextInt(2)));
-            writer.write("0\n");
+            writer.write(String.valueOf(random.nextInt(2)));
+            writer.write("\n");
             unused.add(numCurrent + 1);
         }
 
@@ -41,8 +41,7 @@ public class Main {
         int numTotal = scanner.nextInt();
         System.out.print("How many output: ");
         numOutputWanted = scanner.nextInt();
-        numOutputWanted++; // todo fix this off by one error
-        numOutput = numCurrent +1;
+        numOutput = numCurrent;
 
         for(; numCurrent < numTotal; numCurrent++) {
             writer.write(String.valueOf(numCurrent +1));
@@ -69,7 +68,7 @@ public class Main {
                 int randomIndex2;
                 do {
                     randomIndex2 = getRandom();
-                } while(randomIndex2 == randomIndex1 && unused.size() != 0);
+                } while(randomIndex2 == randomIndex1 && unused.size() > 1);
                 writer.write("\t");
                 writer.write(String.valueOf(randomIndex2));
             }

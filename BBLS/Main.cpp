@@ -23,15 +23,19 @@ int main(int argc, char* argv[]) {
 	fin.close();
 
 	ofstream fout;
-	do {
-		cout << "Output file name: ";
-		cin >> fileName;
-		fout.open(fileName);
-	} while (fout.fail());
+	cout << "Output file name: ";
+	cin >> fileName;
 
 	graph.simplify();
 
-	cout << "Writing file..." << endl;
+	fout.open(fileName);
+	while (fout.fail()) {
+		cout << "I'm sorry, but I couldn't open that file for writing" << endl;
+		cout << "File name: ";
+		cin >> fileName;
+		fout.open(fileName);
+	}
+	cout << endl << "Writing file..." << endl;
 	graph.write(fout);
 	fout.close();
 
