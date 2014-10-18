@@ -160,6 +160,7 @@ bool BBLSGraph::simplify() {
 			std::cout << (originalEntries - gateMap.size()) << " entries." << std::endl;
 		}
 	} while (continueSimplifying);
+	renumber();
 
 	return anySimplified;
 }
@@ -338,6 +339,11 @@ bool BBLSGraph::simplifyGates() {
 					node->type = ConstantWire;
 					node->inputLeft = 0;
 					node->inputRight = 0;
+				}
+				else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->output) {
+					node->inputLeft = left->inputLeft;
+					node->inputRight = right->inputLeft;
+					somethingChanged = true;
 				}
 			}
 		}
