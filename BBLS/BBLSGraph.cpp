@@ -149,9 +149,9 @@ bool BBLSGraph::simplify() {
 	std::cout << std::endl << "Simplifying..." << std::endl;
 	do {
 		continueSimplifying = false;
-		
-		continueSimplifying |= simplifyGates();
+
 		continueSimplifying |= removeDuplicates();
+		continueSimplifying |= simplifyGates();
 		continueSimplifying |= removeUnused();
 
 		if (continueSimplifying) {
@@ -358,19 +358,21 @@ bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
 	bool result = false;
 	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
-		if (node->inputLeft == oldInput && node->type != ConstantWire) {
+		if (node->inputLeft == oldInput) {
 			node->inputLeft = newInput;
 			result = true;
 		}
-		if (node->inputRight == oldInput && node->type != ConstantWire) {
+		if (node->inputRight == oldInput) {
 			node->inputRight = newInput;
 			result = true;
 		}
 	}
 
-	if (outputs.find(oldInput) != outputs.end()) {
-		outputs[oldInput] = newInput;
-		result = true;
+	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
+		if (itr->first == oldInput || itr->second == oldInput) {
+			outputs[itr->first] = newInput;
+			result = true;
+		}
 	}
 	return result;
 }
@@ -378,9 +380,12 @@ bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
 bool BBLSGraph::isUsed(unsigned int input) {
 	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
-		if ((node->type != ConstantWire && node->type != VariableWire) &&
-			node->inputLeft == input || node->inputRight == input)
-			return true;
+		if (node->type != ConstantWire && node->type != VariableWire) {
+			if (node->inputLeft == input)
+				return true;
+			if (node->type != NotGate && node->inputRight == input)
+				return true;
+		}
 	}
 	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
 		if (input == itr->second) {

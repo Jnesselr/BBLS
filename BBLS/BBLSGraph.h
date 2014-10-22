@@ -27,6 +27,9 @@ struct BBLSNode{
 
 	bool operator<(const BBLSNode& node) const {
 		if (this->inputLeft == node.inputLeft) {
+			if (this->inputRight == node.inputRight) {
+				return this->type < node.type;
+			}
 			return this->inputRight < node.inputRight;
 		}
 		return this->inputLeft < node.inputLeft;
