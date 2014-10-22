@@ -160,7 +160,6 @@ bool BBLSGraph::simplify() {
 			std::cout << (originalEntries - gateMap.size()) << " entries." << std::endl;
 		}
 	} while (continueSimplifying);
-	renumber();
 
 	return anySimplified;
 }
@@ -316,6 +315,7 @@ bool BBLSGraph::simplifyGates() {
 						somethingChanged = replaceInputs(node->output, node->inputLeft);
 					}
 					else {
+						// The left input doesn't change
 						node->type = NotGate;
 						node->inputRight = 0;
 					}
@@ -415,7 +415,7 @@ bool BBLSGraph::removeDuplicates() {
 	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		auto found = used.find(*node);
-		if (node->type != VariableWire && node->type != ConstantWire) {
+		if (node->type != VariableWire) {
 			if (found != used.end()) {
 				somethingChanged |= replaceInputs(node->output, found->output);
 			}
