@@ -15,11 +15,14 @@ public class Main {
     public static void main(String[] args) throws IOException {
         unused = new HashSet<Integer>();
         Scanner scanner = new Scanner(System.in);
+	System.out.print("File name: ");
+	String fileName = scanner.nextLine();
+	FileWriter writer = new FileWriter(fileName);
+
         System.out.print("Number of wires: ");
         int numWires = scanner.nextInt();
         System.out.print("Number constant: ");
         int numConstant = scanner.nextInt();
-        FileWriter writer = new FileWriter("M:/BBLS/BBLS/test.txt");
 
         numCurrent = 0;
 
