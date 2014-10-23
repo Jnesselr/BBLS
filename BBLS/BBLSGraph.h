@@ -58,9 +58,15 @@ private:
 	bool removeUnused();
 	bool removeDuplicates();
 	bool renumber();
+	bool updateNode(unsigned int, BBLSNode*);
 	bool replaceInputs(unsigned int oldInput, unsigned int newInput);
 	bool isUsed(unsigned int input);
+
+	void increaseUsed(unsigned int input);
+	void reduceUsed(unsigned int input);
+
 	map<unsigned int, BBLSNode*> gateMap;
 	map<unsigned int, unsigned int> outputs;
+	map<unsigned int, unsigned int> used;
 };
 
