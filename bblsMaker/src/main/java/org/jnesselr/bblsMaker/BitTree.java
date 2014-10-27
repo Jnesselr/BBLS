@@ -11,6 +11,7 @@ public class BitTree {
     private static Set<Integer> outputs = new HashSet<Integer>();
     private static Map<Integer, Integer> used = new HashMap<Integer, Integer>();
     private static int outputCount = 0;
+    private static int maxOutput = 0;
 
     public static int getNextOutput() {
         outputCount++;
@@ -19,9 +20,7 @@ public class BitTree {
 
     private static void update(int output, BitTreeNode newNode) {
         BitTreeNode oldNode = graph.get(output);
-        if(oldNode == null) {
-            graph.put(output, newNode);
-        } else {
+        if(oldNode != null) {
             if(oldNode.type != BitTreeNodeType.VariableWire &&
                     oldNode.type != BitTreeNodeType.ConstantWire) {
                 reduceUsed(oldNode.inputLeft);
@@ -36,6 +35,7 @@ public class BitTree {
             if(newNode.type != BitTreeNodeType.NotGate)
                 increaseUsed(newNode.inputRight);
         }
+        graph.put(output, newNode);
     }
 
     private static void increaseUsed(int input) {
@@ -170,7 +170,17 @@ public class BitTree {
         int[] wires = data.getWires();
 
         for (int wire : wires) {
+
+            if(wire < maxOutput) {
+                BitTree.setOrGate(
+                        BitTree.getNextOutput(),
+                        wire,
+                        wire
+                );
+                wire = outputCount; // The last output used here.
+            }
             outputs.add(wire);
+            maxOutput = wire;
         }
     }
 }

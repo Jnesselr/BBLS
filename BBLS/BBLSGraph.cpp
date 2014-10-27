@@ -1,9 +1,11 @@
 #include "BBLSGraph.h"
-#include <algorithm>
+
 #include <iostream>
+#include <unordered_set>
 
 BBLSGraph::BBLSGraph()
 {
+    maxNode = 0;
 }
 
 
@@ -13,6 +15,8 @@ BBLSGraph::~BBLSGraph()
 		delete itr->second;
 	}
 	gateMap.clear();
+
+	delete[] used;
 }
 
 BBLSNode* BBLSGraph::createNode(unsigned int key, NodeType type) {
@@ -27,8 +31,7 @@ void BBLSGraph::readGraph(istream &fin) {
 	char type;
 	unsigned int leftIndex, rightIndex;
 	BBLSNode* node = NULL;
-	set<unsigned int> notOutputs;
-	int maxNode = 0;
+    std::unordered_set<unsigned int> notOutputs;
 
 	while (!fin.eof()) {
 		fin >> keyIndex;
@@ -76,14 +79,16 @@ void BBLSGraph::readGraph(istream &fin) {
 
 		if (node != NULL) {
 			gateMap[keyIndex] = node;
+			maxNode = std::max(maxNode, node->output);
 			if (node->type != ConstantWire && node->type != VariableWire) {
-				notOutputs.insert(node->inputLeft);
-				increaseUsed(node->inputLeft);
-				outputs[node->inputLeft] = node->inputLeft;
 				outputs[node->output] = node->output;
+
+				maxNode = std::max(maxNode, node->inputLeft);
+				notOutputs.insert(node->inputLeft);
+				outputs[node->inputLeft] = node->inputLeft;
 				if (node->type != NotGate) {
+					maxNode = std::max(maxNode, node->inputRight);
 					notOutputs.insert(node->inputRight);
-					increaseUsed(node->inputRight);
 					outputs[node->inputRight] = node->inputRight;
 				}
 			}
@@ -95,6 +100,23 @@ void BBLSGraph::readGraph(istream &fin) {
 		// Erase the possibilty of it being an output, by value not index
 		outputs.erase(*itr);
 	}
+
+	// Create the used size now that we know how big it should be
+	used = new unsigned int[maxNode]();
+
+
+	// Set the used counts for all gates
+	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+		BBLSNode* node = itr->second;
+		
+		if (node->type != ConstantWire && node->type != VariableWire) {
+			increaseUsed(node->inputLeft);
+			if (node->type != NotGate) {
+				increaseUsed(node->inputRight);
+			}
+		}
+	}
+
 
 	// All outputs are technically used once
 	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
@@ -157,11 +179,11 @@ bool BBLSGraph::simplify() {
 	do {
 		continueSimplifying = false;
 
-		//std::cout << " -> Removing duplicates" << std::endl;
+		std::cout << " -> Removing duplicates" << std::endl;
 		continueSimplifying |= removeDuplicates();
-		//std::cout << " -> Simplifying gates" << std::endl;
+		std::cout << " -> Simplifying gates" << std::endl;
 		continueSimplifying |= simplifyGates();
-		//std::cout << " -> Removing unused" << std::endl;
+		std::cout << " -> Removing unused" << std::endl;
 		continueSimplifying |= removeUnused();
 
 		if (continueSimplifying) {
@@ -178,19 +200,18 @@ bool BBLSGraph::simplifyGates() {
 	bool somethingChanged = false;
 	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
-		NodeType originalType = node->type;
 		BBLSNode* left = NULL;
 		BBLSNode* right = NULL;
-		if (node->inputLeft != 0 && node->type != ConstantWire)
+		if (node->inputLeft != 0 && node->type != ConstantWire) {
+			if (!isUsed(node->inputLeft))
+				std::cout << node->output << " is using left " << node->inputLeft << " when it doesn't exist" << std::endl;
 			left = gateMap[node->inputLeft];
-		if (node->inputRight != 0)
+		}
+		if (node->inputRight != 0) {
+			if (!isUsed(node->inputRight))
+				std::cout << node->output << " is using right " << node->inputRight << " when it doesn't exist" << std::endl;
 			right = gateMap[node->inputRight];
-
-		BBLSNode result;
-		result.type = node->type;
-		result.output = 0;
-		result.inputLeft = 0;
-		result.inputRight = 0;
+		}
 
 		if (left != NULL && right == NULL) {
 			// ConstantWire and NotGate
@@ -198,11 +219,10 @@ bool BBLSGraph::simplifyGates() {
 				if (left->type == ConstantWire) {
 					// We can simplify this to the oposite of this constant
 					unsigned int newState = (left->inputLeft == 0 ? 1 : 0);
-					result.type = ConstantWire;
-					result.inputLeft = newState;
+					somethingChanged |= updateNode(node->output, ConstantWire, newState, 0);
 				}
 				else if (left->type == NotGate) {
-					somethingChanged = replaceInputs(node->output, left->inputLeft);
+					somethingChanged |= replaceInputs(node->output, left->inputLeft);
 				}
 			}
 		}
@@ -214,47 +234,35 @@ bool BBLSGraph::simplifyGates() {
 					if (left->inputLeft == 1 && right->inputLeft == 1) {
 						newState = 1;
 					}
-					result.type = ConstantWire;
-					result.inputLeft = newState;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, newState, 0);
 				}
 				else if (left->type == ConstantWire) {
 					if (left->inputLeft == 0) {
-						result.type = ConstantWire;
-						result.inputLeft = 0;
-						result.inputRight = 0;
+						somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
 					}
 					else {
-						somethingChanged = replaceInputs(node->output, node->inputRight);
+						somethingChanged |= replaceInputs(node->output, node->inputRight);
 					}
 				}
 				else if (right->type == ConstantWire) {
 					if (right->inputLeft == 0) {
-						result.type = ConstantWire;
-						result.inputLeft = 0;
-						result.inputRight = 0;
+						somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
 					}
 					else {
-						somethingChanged = replaceInputs(node->output, node->inputLeft);
+						somethingChanged |= replaceInputs(node->output, node->inputLeft);
 					}
 				}
 				else if (node->inputLeft == node->inputRight) {
-					somethingChanged = replaceInputs(node->output, node->inputLeft);
+					somethingChanged |= replaceInputs(node->output, node->inputLeft);
 				}
 				else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->inputLeft) {
-					result.type = NotGate;
-					result.inputLeft = left->inputLeft;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, NotGate, left->inputLeft, 0);
 				}
 				else if (left->type == NotGate && right->type == VariableWire && left->inputLeft == right->output) {
-					result.type = ConstantWire;
-					result.inputLeft = 0;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
 				}
 				else if (left->type == VariableWire && right->type == NotGate && left->output == right->inputLeft) {
-					result.type = ConstantWire;
-					result.inputLeft = 0;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
 				}
 			}
 			else if (node->type == OrGate) {
@@ -263,47 +271,35 @@ bool BBLSGraph::simplifyGates() {
 					if (left->inputLeft == 1 || right->inputLeft == 1) {
 						newState = 1;
 					}
-					result.type = ConstantWire;
-					result.inputLeft = newState;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, newState, 0);
 				}
 				else if (left->type == ConstantWire) {
 					if (left->inputLeft == 0) {
-						somethingChanged = replaceInputs(node->output, node->inputRight);
+						somethingChanged |= replaceInputs(node->output, node->inputRight);
 					}
 					else {
-						result.type = ConstantWire;
-						result.inputLeft = 1;
-						result.inputRight = 0;
+						somethingChanged |= updateNode(node->output, ConstantWire, 1, 0);
 					}
 				}
 				else if (right->type == ConstantWire) {
 					if (right->inputLeft == 0) {
-						somethingChanged = replaceInputs(node->output, node->inputLeft);
+						somethingChanged |= replaceInputs(node->output, node->inputLeft);
 					}
 					else {
-						result.type = ConstantWire;
-						result.inputLeft = 1;
-						result.inputRight = 0;
+						somethingChanged |= updateNode(node->output, ConstantWire, 1, 0);
 					}
 				}
 				else if (node->inputLeft == node->inputRight) {
-					somethingChanged = replaceInputs(node->output, node->inputLeft);
+					somethingChanged |= replaceInputs(node->output, node->inputLeft);
 				}
 				else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->inputLeft) {
-					result.type = NotGate;
-					result.inputLeft = left->inputLeft;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, NotGate, left->inputLeft, 0);
 				}
 				else if (left->type == NotGate && right->type == VariableWire && left->inputLeft == right->output) {
-					result.type = ConstantWire;
-					result.inputLeft = 1;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, 1, 0);
 				}
 				else if (left->type == VariableWire && right->type == NotGate && left->output == right->inputLeft) {
-					result.type = ConstantWire;
-					result.inputLeft = 1;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, 1, 0);
 				}
 			}
 			else if (node->type == XorGate) {
@@ -312,64 +308,77 @@ bool BBLSGraph::simplifyGates() {
 					if (left->inputLeft != right->inputLeft) {
 						newState = 1;
 					}
-					result.type = ConstantWire;
-					result.inputLeft = newState;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, newState, 0);
 				}
 				else if (left->type == ConstantWire) {
 					if (left->inputLeft == 0) {
-						somethingChanged = replaceInputs(node->output, node->inputRight);
+						somethingChanged |= replaceInputs(node->output, node->inputRight);
 					}
 					else {
-						result.type = NotGate;
-						result.inputLeft = node->inputRight;
-						result.inputRight = 0;
+						somethingChanged |= updateNode(node->output, NotGate, node->inputRight, 0);
 					}
 				}
 				else if (right->type == ConstantWire) {
 					if (right->inputLeft == 0) {
-						somethingChanged = replaceInputs(node->output, node->inputLeft);
+						somethingChanged |= replaceInputs(node->output, node->inputLeft);
 					}
 					else {
-						// The left input doesn't change
-						result.type = NotGate;
-						result.inputLeft = node->inputLeft;
-						result.inputRight = 0;
+						somethingChanged |= updateNode(node->output, NotGate, node->inputLeft, 0);
 					}
 				}
 				else if (node->inputLeft == node->inputRight) {
-					result.type = ConstantWire;
-					result.inputLeft = 0;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
 				}
 				else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->inputLeft) {
-					result.type = ConstantWire;
-					result.inputLeft = 0;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
 				}
 				else if (left->type == NotGate && right->type == VariableWire && left->inputLeft == right->output) {
-					result.type = ConstantWire;
-					result.inputLeft = 0;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
 				}
 				else if (left->type == VariableWire && right->type == NotGate && left->output == right->inputLeft) {
-					result.type = ConstantWire;
-					result.inputLeft = 0;
-					result.inputRight = 0;
+					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
 				}
 				else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->output) {
-					result.inputLeft = left->inputLeft;
-					result.inputRight = right->inputLeft;
-					somethingChanged = true;
+					somethingChanged |= updateNode(node->output, node->type, left->inputLeft, right->inputLeft);
 				}
 			}
 		}
-		if (result.inputLeft != 0 || result.inputRight != 0 || result.type != node->type) {
-			result.output = node->output;
-			somethingChanged |= updateNode(node->output, &result);
-		}
 	}
 	return somethingChanged;
+}
+
+bool BBLSGraph::updateNode(unsigned int output, NodeType type, unsigned int inputLeft, unsigned int inputRight) {
+    auto found = gateMap.find(output);
+	BBLSNode* node;
+	bool result = false;
+	if (found == gateMap.end()) {
+		node = createNode(output, type);
+		result = true;
+	}
+	else {
+		node = found->second;
+		result = node->type != type || node->inputLeft != inputLeft || node->inputRight != inputRight;
+
+		if (node->type != ConstantWire && node->type != VariableWire) {
+			reduceUsed(node->inputLeft);
+			if (node->type != NotGate) {
+				reduceUsed(node->inputRight);
+			}
+		}
+	}
+
+	node->type = type;
+	node->inputLeft = inputLeft;
+	node->inputRight = inputRight;
+	
+	if (node->type != ConstantWire && node->type != VariableWire) {
+		increaseUsed(node->inputLeft);
+		if (node->type != NotGate) {
+			increaseUsed(node->inputRight);
+		}
+	}
+
+	return result;
 }
 
 bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
@@ -377,18 +386,19 @@ bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
 	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		if (node->type != ConstantWire && node->type != VariableWire) {
+
 			if (node->inputLeft == oldInput) {
 				reduceUsed(oldInput);
 				node->inputLeft = newInput;
 				increaseUsed(newInput);
 				result = true;
 			}
-			if (node->type != NotGate && node->inputRight == oldInput) {
+            if (node->type != NotGate && node->inputRight == oldInput) {
 				reduceUsed(oldInput);
 				node->inputRight = newInput;
 				increaseUsed(newInput);
 				result = true;
-			}
+            }
 		}
 	}
 
@@ -400,29 +410,16 @@ bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
 			result = true;
 		}
 	}
+
+	if (used[oldInput-1] != 0) {
+		std::cout << oldInput << " => " << newInput << " is " << used[oldInput-1] << std::endl;
+	}
 	
 	return result;
 }
 
 bool BBLSGraph::isUsed(unsigned int input) {
-	/*
-	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
-		BBLSNode* node = itr->second;
-		if (node->type != ConstantWire && node->type != VariableWire) {
-			if (node->inputLeft == input)
-				return true;
-			if (node->type != NotGate && node->inputRight == input)
-				return true;
-		}
-	}
-	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
-		if (input == itr->second) {
-			return true;
-		}
-	}
-	return false;
-	*/
-	return used.find(input) != used.end();
+	return used[input-1] > 0;
 }
 
 bool BBLSGraph::removeUnused() {
@@ -432,7 +429,13 @@ bool BBLSGraph::removeUnused() {
 		if (!isUsed(itr->second->output)) {
 			// Make a copy of the reference before deleting
 			auto old = itr;
-			itr++;
+            itr++;
+            BBLSNode* node = old->second;
+            if(node->type != VariableWire && node->type != ConstantWire) {
+                reduceUsed(node->inputLeft);
+                if(node->type != NotGate)
+                    reduceUsed(node->inputRight);
+            }
 			gateMap.erase(old);
 			somethingChanged = true;
 		}
@@ -446,7 +449,7 @@ bool BBLSGraph::removeUnused() {
 bool BBLSGraph::removeDuplicates() {
 	bool somethingChanged = false;
 
-	set<BBLSNode> usedGates;
+    std::unordered_set<BBLSNode, BBLSNodeHash> usedGates;
 	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		auto found = usedGates.find(*node);
@@ -496,57 +499,14 @@ bool BBLSGraph::renumber() {
 	return somethingChanged;
 }
 
-bool BBLSGraph::updateNode(unsigned int output, BBLSNode* newNode) {
-	if (newNode->output == 0)
-		return false;
-	bool somethingChanged = false;
-	auto oldNodeItr = gateMap.find(output);
-	/*
-	if (oldNodeItr != gateMap.end()) {
-		gateMap[output]->type = newNode->type;
-		gateMap[output]->inputLeft = newNode->inputLeft;
-		gateMap[output]->inputRight = newNode->inputRight;
-		somethingChanged = true;
-	}
-	else {
-	*/
-		BBLSNode* oldNode = oldNodeItr->second;
-		if (oldNode->type != VariableWire && oldNode->type != ConstantWire) {
-			reduceUsed(oldNode->inputLeft);
-			if (oldNode->type != NotGate)
-				reduceUsed(oldNode->inputRight);
-		}
-		oldNode->type = newNode->type;
-		oldNode->inputLeft = newNode->inputLeft;
-		oldNode->inputRight = newNode->inputRight;
-		somethingChanged = true;
-	//}
-
-	if (newNode->type != VariableWire && newNode->type != ConstantWire) {
-		increaseUsed(newNode->inputLeft);
-		if (newNode->type != NotGate)
-			increaseUsed(newNode->inputRight);
-	}
-
-	return somethingChanged;
-}
-
 void BBLSGraph::increaseUsed(unsigned int input) {
-	auto itr = used.find(input);
-	unsigned int count = 0;
-	if (itr != used.end()) {
-		count = itr->second;
-	}
-	used[input] = count + 1;
+    used[input - 1] += 1;
 }
 
 void BBLSGraph::reduceUsed(unsigned int input) {
-	auto itr = used.find(input);
-	if (itr != used.end()) {
-		unsigned int count = itr->second;
+	unsigned int count = used[input-1];
+	if (count != 0) {
 		count--;
-		used[input] = count;
-		if (count == 0)
-			used.erase(input);
+		used[input-1] = count;
 	}
 }

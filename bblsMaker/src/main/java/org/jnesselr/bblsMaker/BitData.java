@@ -234,5 +234,21 @@ public class BitData {
 
         return result;
     }
+
+    public BitData flipEndian(int bits) {
+        // Todo remove this assert
+        assert bitCount % bits == 0;
+        BitData result = new BitData(bitCount);
+
+        int groups = bitCount / bits;
+        for (int i = 0; i < groups; i++) {
+            for (int j = 0; j < bits; j++) {
+                int resultIndex = bits * (groups - i - 1);
+                result.wires[resultIndex + j] = wires[bits * i + j];
+            }
+        }
+
+        return result;
+    }
 }
 

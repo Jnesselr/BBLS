@@ -9,6 +9,70 @@ public class Main {
     private static final BitType uint32 = BitFactory.createBits(32);
 
     public static void main(String[] args) throws IOException {
+
+        BitData[] data = {
+                uint32.make(0x01000000),
+                uint32.make(0x81cd02ab),
+                uint32.make(0x7e569e8b),
+                uint32.make(0xcd9317e2),
+                uint32.make(0xfe99f2de),
+                uint32.make(0x44d49ab2),
+                uint32.make(0xb8851ba4),
+                uint32.make(0xa3080000),
+                uint32.make(0x00000000),
+                uint32.make(0xe320b6c2),
+                uint32.make(0xfffc8d75),
+                uint32.make(0x0423db8b),
+                uint32.make(0x1eb942ae),
+                uint32.make(0x710e951e),
+                uint32.make(0xd797f7af),
+                uint32.make(0xfc8892b0),
+                uint32.make(0xf1fc122b),
+                uint32.make(0xc7f5d74d),
+                uint32.make(0xf2b9441a),
+                uint32.make(0x42a14695)
+        };
+
+        // First round
+        BitData[] result = sha256(data, 640);
+
+        // Second round
+        result = sha256(result, 256);
+
+        BitTree.setOutput(result[7].flipEndian(8));
+        BitTree.setOutput(result[6].flipEndian(8));
+        BitTree.setOutput(result[5].flipEndian(8));
+        BitTree.setOutput(result[4].flipEndian(8));
+        BitTree.setOutput(result[3].flipEndian(8));
+        BitTree.setOutput(result[2].flipEndian(8));
+        BitTree.setOutput(result[1].flipEndian(8));
+        BitTree.setOutput(result[0].flipEndian(8));
+
+        BitTree.clean();
+        File dataFile = new File("data.txt");
+        PrintStream stream = new PrintStream(dataFile);
+        BitTree.displayData(stream);
+    }
+
+    private static BitData[] sha256(BitData[] data, long length) {
+        BitData[] fullData = new BitData[(int) (((length + 576) / 512) * 16)];
+        System.arraycopy(data, 0, fullData, 0, data.length);
+
+        for (int i = data.length; i < fullData.length - 2; i++) {
+            fullData[i] = uint32.make(0);
+        }
+
+        int lengthToShift = (int) (31 - (length % 32));
+        int indexToShift = (int) (length / 32);
+        BitData mask = uint32.make(1 << lengthToShift);
+        fullData[indexToShift] = fullData[indexToShift]
+                .rightRotate(lengthToShift + 1)
+                .leftShift(lengthToShift + 1)
+                .or(mask);
+
+        fullData[fullData.length - 2] = uint32.make(length / 100000000L);
+        fullData[fullData.length - 1] = uint32.make(length % 100000000L);
+
         BitData h0 = uint32.make(0x6a09e667);
         BitData h1 = uint32.make(0xbb67ae85);
         BitData h2 = uint32.make(0x3c6ef372);
@@ -18,32 +82,23 @@ public class Main {
         BitData h6 = uint32.make(0x1f83d9ab);
         BitData h7 = uint32.make(0x5be0cd19);
 
-        BitData[] data = getData();
-        BitData[] result = sha256_round(h0, h1, h2, h3, h4, h5, h6, h7, data);
+        BitData[] result = new BitData[8];
+        BitData[] roundData = new BitData[16];
+        for (int i = 0; i < fullData.length; i += 16) {
+            System.arraycopy(fullData, i, roundData, 0, 16);
+            result = sha256_round(h0, h1, h2, h3, h4, h5, h6, h7, roundData);
 
-        BitTree.setOutput(result[0]);
-        BitTree.setOutput(result[1]);
-        BitTree.setOutput(result[2]);
-        BitTree.setOutput(result[3]);
-        BitTree.setOutput(result[4]);
-        BitTree.setOutput(result[5]);
-        BitTree.setOutput(result[6]);
-        BitTree.setOutput(result[7]);
-
-        BitTree.clean();
-        File dataFile = new File("data.txt");
-        PrintStream stream = new PrintStream(dataFile);
-        BitTree.displayData(stream);
+            h0 = result[0];
+            h1 = result[1];
+            h2 = result[2];
+            h3 = result[3];
+            h4 = result[4];
+            h5 = result[5];
+            h6 = result[6];
+            h7 = result[7];
+        }
+        return result;
     }
-//
-//    private static BitData[] sha256(BitData[] data, long length) {
-//        if(length % 32 != 0) {
-//            // Shift the data to the right, then to the left
-//            // to make the constants that are needed.
-//        } else {
-//
-//        }
-//    }
 
     private static BitData[] sha256_round(BitData h0, BitData h1, BitData h2, BitData h3, BitData h4, BitData h5, BitData h6, BitData h7, BitData[] data) {
         BitData[] w = new BitData[64];
@@ -92,15 +147,6 @@ public class Main {
         h7 = h7.add(h);
 
         return new BitData[]{h0, h1, h2, h3, h4, h5, h6, h7};
-    }
-
-    private static BitData[] getData() {
-        BitData[] result = new BitData[16];
-        result[0] = uint32.make(0x80000000);
-        for (int i = 1; i < result.length; i++) {
-            result[i] = uint32.make(0);
-        }
-        return result;
     }
 
     private static BitData[] getConstants() {
