@@ -9,32 +9,16 @@ public class Main {
     private static final BitType uint32 = BitFactory.createBits(32);
 
     public static void main(String[] args) throws IOException {
-
-        BitData[] data = {
-                uint32.make(0x01000000),
-                uint32.make(0x81cd02ab),
-                uint32.make(0x7e569e8b),
-                uint32.make(0xcd9317e2),
-                uint32.make(0xfe99f2de),
-                uint32.make(0x44d49ab2),
-                uint32.make(0xb8851ba4),
-                uint32.make(0xa3080000),
-                uint32.make(0x00000000),
-                uint32.make(0xe320b6c2),
-                uint32.make(0xfffc8d75),
-                uint32.make(0x0423db8b),
-                uint32.make(0x1eb942ae),
-                uint32.make(0x710e951e),
-                uint32.make(0xd797f7af),
-                uint32.make(0xfc8892b0),
-                uint32.make(0xf1fc122b),
-                uint32.make(0xc7f5d74d),
-                uint32.make(0xf2b9441a),
-                uint32.make(0x42a14695)
-        };
+        BitcoinHeader header = new BitcoinHeader()
+                .setVersion(1)
+                .setPrevBlock("81cd02ab7e569e8bcd9317e2fe99f2de44d49ab2b8851ba4a308000000000000")
+                .setMerkleRoot("e320b6c2fffc8d750423db8b1eb942ae710e951ed797f7affc8892b0f1fc122b")
+                .setTime("c7f5d74d")
+                .setDifficulty("f2b9441a");
+                //.setNonce("42a14695");
 
         // First round
-        BitData[] result = sha256(data, 640);
+        BitData[] result = sha256(header.getData(), 640);
 
         // Second round
         result = sha256(result, 256);
