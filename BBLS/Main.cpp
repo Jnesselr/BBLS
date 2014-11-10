@@ -12,7 +12,7 @@ int main(int argc, char* argv[]) {
 	do {
 		cout << "File name: ";
 		cin >> fileName;
-		fin.open(fileName);
+		fin.open(fileName.c_str());
 		if (fin.fail()) {
 			cout << "I'm sorry, that wasn't a valid name" << endl << endl;
 		}
@@ -28,12 +28,12 @@ int main(int argc, char* argv[]) {
 
 	graph.simplify();
 
-	fout.open(fileName);
+	fout.open(fileName.c_str());
 	while (fout.fail()) {
 		cout << "I'm sorry, but I couldn't open that file for writing" << endl;
 		cout << "File name: ";
 		cin >> fileName;
-		fout.open(fileName);
+		fout.open(fileName.c_str());
 	}
 	cout << endl << "Writing file..." << endl;
 	graph.write(fout);

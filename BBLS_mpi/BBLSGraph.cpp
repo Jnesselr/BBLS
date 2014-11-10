@@ -1,7 +1,7 @@
 #include "BBLSGraph.h"
 
 #include <iostream>
-#include <set>
+#include <unordered_set>
 
 BBLSGraph::BBLSGraph()
 {
@@ -11,7 +11,7 @@ BBLSGraph::BBLSGraph()
 
 BBLSGraph::~BBLSGraph()
 {
-	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		delete itr->second;
 	}
 	gateMap.clear();
@@ -31,7 +31,7 @@ void BBLSGraph::readGraph(istream &fin) {
 	char type;
 	unsigned int leftIndex, rightIndex;
 	BBLSNode* node = NULL;
-    std::set<unsigned int> notOutputs;
+    std::unordered_set<unsigned int> notOutputs;
 
 	while (!fin.eof()) {
 		fin >> keyIndex;
@@ -96,7 +96,7 @@ void BBLSGraph::readGraph(istream &fin) {
 	}
 
 	// Remove everything from outputs that's in notOutputs
-	for (std::set<unsigned int>::iterator itr = notOutputs.begin(); itr != notOutputs.end(); itr++) {
+	for (auto itr = notOutputs.begin(); itr != notOutputs.end(); itr++) {
 		// Erase the possibilty of it being an output, by value not index
 		outputs.erase(*itr);
 	}
@@ -106,7 +106,7 @@ void BBLSGraph::readGraph(istream &fin) {
 
 
 	// Set the used counts for all gates
-	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		
 		if (node->type != ConstantWire && node->type != VariableWire) {
@@ -119,7 +119,7 @@ void BBLSGraph::readGraph(istream &fin) {
 
 
 	// All outputs are technically used once
-	for (std::map<unsigned int, unsigned int>::iterator itr = outputs.begin(); itr != outputs.end(); itr++) {
+	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
 		increaseUsed(itr->first);
 	}
 
@@ -129,7 +129,7 @@ void BBLSGraph::readGraph(istream &fin) {
 void BBLSGraph::write(ostream &fout) {
 	fout << "--INPUT--" << std::endl;
 
-	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		fout << itr->first << "\t";
 		BBLSNode* node = itr->second;
 		switch (node->type) {
@@ -165,7 +165,7 @@ void BBLSGraph::write(ostream &fout) {
 	}
 
 	fout << std::endl << "--OUTPUT--";
-	for (map<unsigned int, unsigned int>::iterator itr = outputs.begin(); itr != outputs.end(); itr++) {
+	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
 		fout << std::endl << itr->first << " -> " << itr->second;
 	}
 }
@@ -198,7 +198,7 @@ bool BBLSGraph::simplify() {
 
 bool BBLSGraph::simplifyGates() {
 	bool somethingChanged = false;
-	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		BBLSNode* left = NULL;
 		BBLSNode* right = NULL;
@@ -348,7 +348,7 @@ bool BBLSGraph::simplifyGates() {
 }
 
 bool BBLSGraph::updateNode(unsigned int output, NodeType type, unsigned int inputLeft, unsigned int inputRight) {
-    map<unsigned int, BBLSNode*>::iterator found = gateMap.find(output);
+    auto found = gateMap.find(output);
 	BBLSNode* node;
 	bool result = false;
 	if (found == gateMap.end()) {
@@ -383,7 +383,7 @@ bool BBLSGraph::updateNode(unsigned int output, NodeType type, unsigned int inpu
 
 bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
 	bool result = false;
-	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		if (node->type != ConstantWire && node->type != VariableWire) {
 
@@ -402,7 +402,7 @@ bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
 		}
 	}
 
-	for (map<unsigned int, unsigned int>::iterator itr = outputs.begin(); itr != outputs.end(); itr++) {
+	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
 		if (itr->first == oldInput || itr->second == oldInput) {
 			reduceUsed(oldInput);
 			outputs[itr->first] = newInput;
@@ -424,11 +424,11 @@ bool BBLSGraph::isUsed(unsigned int input) {
 
 bool BBLSGraph::removeUnused() {
 	bool somethingChanged = false;
-	map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin();
+	auto itr = gateMap.begin();
 	while (itr != gateMap.end()) {
 		if (!isUsed(itr->second->output)) {
 			// Make a copy of the reference before deleting
-			map<unsigned int, BBLSNode*>::iterator old = itr;
+			auto old = itr;
             itr++;
             BBLSNode* node = old->second;
             if(node->type != VariableWire && node->type != ConstantWire) {
@@ -449,13 +449,13 @@ bool BBLSGraph::removeUnused() {
 bool BBLSGraph::removeDuplicates() {
 	bool somethingChanged = false;
 
-    std::set<BBLSNode> usedGates;
-	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+    std::unordered_set<BBLSNode, BBLSNodeHash> usedGates;
+	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
-		std::set<BBLSNode>::iterator found = usedGates.find(*node);
+		auto found = usedGates.find(*node);
 		if (node->type != VariableWire) {
 			if (found != usedGates.end()) {
-				somethingChanged |= replaceInputs(node->output, (*found).output);
+				somethingChanged |= replaceInputs(node->output, found->output);
 			}
 			else {
 				usedGates.insert(*node);
@@ -471,9 +471,9 @@ bool BBLSGraph::renumber() {
 	bool somethingChanged = false;
 
 	unsigned int index = 1;
-	map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin();
+	auto itr = gateMap.begin();
 	while (itr != gateMap.end()) {
-		map<unsigned int, BBLSNode*>::iterator found = gateMap.find(index);
+		auto found = gateMap.find(index);
 
 		// While this index is taken
 		while (found != gateMap.end() && itr != found) {
@@ -485,7 +485,7 @@ bool BBLSGraph::renumber() {
 			// We found an unused index
 			somethingChanged |= replaceInputs(itr->second->output, index);
 			itr->second->output = index;
-			map<unsigned int, BBLSNode*>::iterator old = itr;
+			auto old = itr;
 			itr++;
 			gateMap[index] = old->second;
 			gateMap.erase(old);
