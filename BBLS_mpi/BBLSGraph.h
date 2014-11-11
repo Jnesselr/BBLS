@@ -3,6 +3,7 @@
 #include<algorithm>
 #include<iostream>
 #include<map>
+#include<mpi.h>
 using std::istream;
 using std::ostream;
 using std::map;
@@ -18,11 +19,33 @@ enum NodeType {
 	NotGate
 };
 
+#ifndef MCW
+#define MCW MPI_COMM_WORLD
+#endif
+#define MPI_ENUM MPI_INT
+
+enum Command {
+	START_PROCESS,
+	REQUEST_DATA,
+	DATA,
+	END_PROCESS
+};
+
 struct BBLSNode{
 	NodeType type;
 	unsigned int output;
 	unsigned int inputLeft;
 	unsigned int inputRight;
+
+	bool operator<(const BBLSNode& node) const {
+		if (this->inputLeft == node.inputLeft) {
+			if (this->inputRight == node.inputRight) {
+				return this->type < node.type;
+			}
+			return this->inputRight < node.inputRight;
+		}
+		return this->inputLeft < node.inputLeft;
+	}
 
 	bool operator==(const BBLSNode& node) const {
         if(this->type == node.type && this->type != VariableWire) {
@@ -39,23 +62,12 @@ struct BBLSNode{
 	}
 };
 
-struct BBLSNodeHash {
-    std::size_t operator () ( const BBLSNode& node ) const
-    {
-        // (max * (left - 1) + right - 1) * 5 + type-2
-        unsigned int minInput = std::min(node.inputLeft, node.inputRight);
-        unsigned int maxInput = std::max(node.inputLeft, node.inputRight);
-        
-        // 1000000 is used since we can't actually know the max value here
-        unsigned int hash = (1000000 * minInput + maxInput) * 5 + node.type-1;
-        //cout << node.output << ": " << hash << " for " << minInput << " and " << maxInput << " type " << node.type << endl;
-        return hash;
-    }
-};
-
 class BBLSGraph
 {
 public:
+	// MPI Stuff
+	static void solveThread(int root);
+	
 	BBLSGraph();
 	~BBLSGraph();
 
@@ -64,6 +76,10 @@ public:
 	bool simplify();
 
 private:
+	// MPI Stuff
+	static void sendMessage(Command command, int tag=0, int root=0);
+	static void createDatatypes();
+
 	static BBLSNode* createNode(unsigned int key, NodeType type);
 	bool simplifyGates();
 	bool removeUnused();
@@ -80,5 +96,8 @@ private:
 	map<unsigned int, unsigned int> outputs;
 	unsigned int *used;
     unsigned int maxNode;
+	
+	static MPI_Datatype mpi_nodeType;
+	static MPI_Datatype mpi_threeNodes;
 };
 

@@ -1,17 +1,21 @@
 #include "BBLSGraph.h"
 
 #include <iostream>
-#include <unordered_set>
+#include <set>
+
+// Declaring memory for data types needed
+MPI_Datatype BBLSGraph::mpi_nodeType;
+MPI_Datatype BBLSGraph::mpi_threeNodes;
 
 BBLSGraph::BBLSGraph()
 {
+	createDatatypes();
     maxNode = 0;
 }
 
-
 BBLSGraph::~BBLSGraph()
 {
-	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		delete itr->second;
 	}
 	gateMap.clear();
@@ -31,7 +35,7 @@ void BBLSGraph::readGraph(istream &fin) {
 	char type;
 	unsigned int leftIndex, rightIndex;
 	BBLSNode* node = NULL;
-    std::unordered_set<unsigned int> notOutputs;
+    std::set<unsigned int> notOutputs;
 
 	while (!fin.eof()) {
 		fin >> keyIndex;
@@ -96,8 +100,8 @@ void BBLSGraph::readGraph(istream &fin) {
 	}
 
 	// Remove everything from outputs that's in notOutputs
-	for (auto itr = notOutputs.begin(); itr != notOutputs.end(); itr++) {
-		// Erase the possibilty of it being an output, by value not index
+	for (std::set<unsigned int>::iterator itr = notOutputs.begin(); itr != notOutputs.end(); itr++) {
+		// Erase the possibility of it being an output, by value not index
 		outputs.erase(*itr);
 	}
 
@@ -106,7 +110,7 @@ void BBLSGraph::readGraph(istream &fin) {
 
 
 	// Set the used counts for all gates
-	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		
 		if (node->type != ConstantWire && node->type != VariableWire) {
@@ -119,7 +123,7 @@ void BBLSGraph::readGraph(istream &fin) {
 
 
 	// All outputs are technically used once
-	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
+	for (std::map<unsigned int, unsigned int>::iterator itr = outputs.begin(); itr != outputs.end(); itr++) {
 		increaseUsed(itr->first);
 	}
 
@@ -129,7 +133,7 @@ void BBLSGraph::readGraph(istream &fin) {
 void BBLSGraph::write(ostream &fout) {
 	fout << "--INPUT--" << std::endl;
 
-	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		fout << itr->first << "\t";
 		BBLSNode* node = itr->second;
 		switch (node->type) {
@@ -165,12 +169,13 @@ void BBLSGraph::write(ostream &fout) {
 	}
 
 	fout << std::endl << "--OUTPUT--";
-	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
+	for (map<unsigned int, unsigned int>::iterator itr = outputs.begin(); itr != outputs.end(); itr++) {
 		fout << std::endl << itr->first << " -> " << itr->second;
 	}
 }
 
 bool BBLSGraph::simplify() {
+/**
 	bool anySimplified = false;
 	bool continueSimplifying = false;
 	int originalEntries = gateMap.size();
@@ -194,11 +199,44 @@ bool BBLSGraph::simplify() {
 	} while (continueSimplifying);
 
 	return anySimplified;
+	*/
+	
+	int numProcesses;
+	MPI_Comm_size(MCW, &numProcesses);
+	numProcesses--;
+	
+	int bitSet = (1 << (numProcesses)) - 1;
+	
+	MPI_Status status;
+	Command command;
+	while(numProcesses > 0) {
+		MPI_Recv(&command, 1, MPI_ENUM, MPI_ANY_SOURCE, MPI_ANY_TAG, MCW, &status);
+		if(status.MPI_ERROR == 0) {
+			int source = status.MPI_SOURCE;
+			int tag = status.MPI_TAG;
+			if(command == REQUEST_DATA) {
+				if(bitSet & (1 << (source-1))) {
+					BBLSNode node;
+					node.type = AndGate;
+					node.output = 2;
+					node.inputLeft = source+2;
+					node.inputRight = source+5;
+					sendMessage(DATA, 1, source);
+					MPI_Send(&node, 1, mpi_nodeType, source, 1, MCW);
+					bitSet ^= (1 << (source-1));
+				} else {
+					sendMessage(END_PROCESS, source, source);
+					numProcesses--;
+				}
+			}
+		}
+	}
+	return true;
 }
 
 bool BBLSGraph::simplifyGates() {
 	bool somethingChanged = false;
-	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		BBLSNode* left = NULL;
 		BBLSNode* right = NULL;
@@ -348,7 +386,7 @@ bool BBLSGraph::simplifyGates() {
 }
 
 bool BBLSGraph::updateNode(unsigned int output, NodeType type, unsigned int inputLeft, unsigned int inputRight) {
-    auto found = gateMap.find(output);
+    map<unsigned int, BBLSNode*>::iterator found = gateMap.find(output);
 	BBLSNode* node;
 	bool result = false;
 	if (found == gateMap.end()) {
@@ -383,7 +421,7 @@ bool BBLSGraph::updateNode(unsigned int output, NodeType type, unsigned int inpu
 
 bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
 	bool result = false;
-	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		if (node->type != ConstantWire && node->type != VariableWire) {
 
@@ -402,7 +440,7 @@ bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
 		}
 	}
 
-	for (auto itr = outputs.begin(); itr != outputs.end(); itr++) {
+	for (map<unsigned int, unsigned int>::iterator itr = outputs.begin(); itr != outputs.end(); itr++) {
 		if (itr->first == oldInput || itr->second == oldInput) {
 			reduceUsed(oldInput);
 			outputs[itr->first] = newInput;
@@ -424,11 +462,11 @@ bool BBLSGraph::isUsed(unsigned int input) {
 
 bool BBLSGraph::removeUnused() {
 	bool somethingChanged = false;
-	auto itr = gateMap.begin();
+	map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin();
 	while (itr != gateMap.end()) {
 		if (!isUsed(itr->second->output)) {
 			// Make a copy of the reference before deleting
-			auto old = itr;
+			map<unsigned int, BBLSNode*>::iterator old = itr;
             itr++;
             BBLSNode* node = old->second;
             if(node->type != VariableWire && node->type != ConstantWire) {
@@ -449,13 +487,13 @@ bool BBLSGraph::removeUnused() {
 bool BBLSGraph::removeDuplicates() {
 	bool somethingChanged = false;
 
-    std::unordered_set<BBLSNode, BBLSNodeHash> usedGates;
-	for (auto itr = gateMap.begin(); itr != gateMap.end(); itr++) {
+    std::set<BBLSNode> usedGates;
+	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
-		auto found = usedGates.find(*node);
+		std::set<BBLSNode>::iterator found = usedGates.find(*node);
 		if (node->type != VariableWire) {
 			if (found != usedGates.end()) {
-				somethingChanged |= replaceInputs(node->output, found->output);
+				somethingChanged |= replaceInputs(node->output, (*found).output);
 			}
 			else {
 				usedGates.insert(*node);
@@ -471,9 +509,9 @@ bool BBLSGraph::renumber() {
 	bool somethingChanged = false;
 
 	unsigned int index = 1;
-	auto itr = gateMap.begin();
+	map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin();
 	while (itr != gateMap.end()) {
-		auto found = gateMap.find(index);
+		map<unsigned int, BBLSNode*>::iterator found = gateMap.find(index);
 
 		// While this index is taken
 		while (found != gateMap.end() && itr != found) {
@@ -485,7 +523,7 @@ bool BBLSGraph::renumber() {
 			// We found an unused index
 			somethingChanged |= replaceInputs(itr->second->output, index);
 			itr->second->output = index;
-			auto old = itr;
+			map<unsigned int, BBLSNode*>::iterator old = itr;
 			itr++;
 			gateMap[index] = old->second;
 			gateMap.erase(old);
@@ -509,4 +547,76 @@ void BBLSGraph::reduceUsed(unsigned int input) {
 		count--;
 		used[input-1] = count;
 	}
+}
+
+void BBLSGraph::solveThread(int root) {
+	int pid;
+	MPI_Comm_rank(MCW, &pid);
+	createDatatypes();
+	
+	Command command;
+	MPI_Status status;
+	do {
+		sendMessage(REQUEST_DATA, root, START_PROCESS);
+		MPI_Recv(&command, 1, MPI_ENUM, root, MPI_ANY_TAG, MCW, &status);
+		if(status.MPI_ERROR == 0) {
+			int source = status.MPI_SOURCE;
+			int tag = status.MPI_TAG;
+			if(command == DATA) {
+				int count = tag;
+				// Create buffer large enough to hold all of it. 3 * count BBLSNode
+				//BBLSNode* nodes = new BBLSNode[3 * count];
+				
+				//MPI_Recv(nodes, 3 * count, 
+				BBLSNode node;
+				MPI_Recv(&node, 1, mpi_nodeType, root, MPI_ANY_TAG, MCW, &status);
+				if(status.MPI_ERROR == 0) {
+					std::cout << pid << " got: " << node.type << " (" << node.output << ", "
+							<< node.inputLeft << ", " << node.inputRight << ")" << std::endl;
+				}
+				
+				//delete [] nodes;
+			}
+		}
+	} while(command != END_PROCESS);
+}
+
+void BBLSGraph::createDatatypes() {
+	// BBLSNode struct
+	int block_lengths[5];
+	block_lengths[0] = 1;
+	block_lengths[1] = 1;
+	block_lengths[2] = 1;
+	block_lengths[3] = 1;
+	block_lengths[4] = 1;
+	
+	MPI_Aint displacements[5];
+	displacements[0] = offsetof(BBLSNode, type);
+	displacements[1] = offsetof(BBLSNode, output);
+	displacements[2] = offsetof(BBLSNode, inputLeft);
+	displacements[3] = offsetof(BBLSNode, inputRight);
+	displacements[4] = sizeof(BBLSNode);
+	
+	MPI_Datatype types[5];
+	types[0] = MPI_INT;
+	types[1] = MPI_UNSIGNED;
+	types[2] = MPI_UNSIGNED;
+	types[3] = MPI_UNSIGNED;
+	types[4] = MPI_UB;
+	
+	MPI_Type_struct(5, block_lengths, displacements, types, &mpi_nodeType);
+	MPI_Type_commit(&mpi_nodeType);
+	
+	// 3 BBLSNodes
+	MPI_Type_contiguous(3, mpi_nodeType, &mpi_threeNodes);
+	MPI_Type_commit(&mpi_threeNodes);
+}
+
+void BBLSGraph::sendMessage(Command command, int tag, int root) {
+	MPI_Send(&command,
+		1,
+		MPI_ENUM,
+		root,
+		tag,
+		MCW);
 }

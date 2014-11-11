@@ -16,7 +16,6 @@ using namespace std;
 #endif
 
 int main(int argc, char* argv[]) {
-
     int pid;
     int numProcesses;
 
@@ -29,8 +28,9 @@ int main(int argc, char* argv[]) {
     	ifstream fin;
 	    do {
     		cout << "File name: ";
-		    cin >> fileName;
-	    	fin.open(fileName);
+		    //cin >> fileName;
+			fileName = "test.txt";
+	    	fin.open(fileName.c_str());
     		if (fin.fail()) {
 			    cout << "I'm sorry, that wasn't a valid name" << endl << endl;
 		    }
@@ -42,21 +42,24 @@ int main(int argc, char* argv[]) {
 
     	ofstream fout;
     	cout << "Output file name: ";
-    	cin >> fileName;
+		fileName = "out.txt";
+    	//cin >> fileName;
 
     	graph.simplify();
 
-    	fout.open(fileName);
+    	fout.open(fileName.c_str());
     	while (fout.fail()) {
     		cout << "I'm sorry, but I couldn't open that file for writing" << endl;
     		cout << "File name: ";
     		cin >> fileName;
-    		fout.open(fileName);
+    		fout.open(fileName.c_str());
     	}
     	cout << endl << "Writing file..." << endl;
     	graph.write(fout);
     	fout.close();
-    }
+    } else {
+		BBLSGraph::solveThread(ROOT);
+	}
 
     MPI_Finalize();
 
