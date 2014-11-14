@@ -175,15 +175,15 @@ bool BBLSGraph::simplify() {
 	bool continueSimplifying = false;
 	int originalEntries = gateMap.size();
 
-	std::cout << std::endl << "Simplifying..." << std::endl;
+//	std::cout << std::endl << "Simplifying..." << std::endl;
 	do {
 		continueSimplifying = false;
 
-		std::cout << " -> Removing duplicates" << std::endl;
+//		std::cout << " -> Removing duplicates" << std::endl;
 		continueSimplifying |= removeDuplicates();
-		std::cout << " -> Simplifying gates" << std::endl;
+//		std::cout << " -> Simplifying gates" << std::endl;
 		continueSimplifying |= simplifyGates();
-		std::cout << " -> Removing unused" << std::endl;
+//		std::cout << " -> Removing unused" << std::endl;
 		continueSimplifying |= removeUnused();
 
 		if (continueSimplifying) {

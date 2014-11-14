@@ -1,6 +1,7 @@
 #include<fstream>
 #include<iostream>
 #include<string>
+#include<mpi.h>
 
 #include"BBLSGraph.h"
 
@@ -26,7 +27,9 @@ int main(int argc, char* argv[]) {
 	cout << "Output file name: ";
 	cin >> fileName;
 
+    double startTime = MPI_Wtime();
 	graph.simplify();
+    double time = MPI_Wtime() - startTime;
 
 	fout.open(fileName.c_str());
 	while (fout.fail()) {
@@ -38,6 +41,8 @@ int main(int argc, char* argv[]) {
 	cout << endl << "Writing file..." << endl;
 	graph.write(fout);
 	fout.close();
+
+    cout << "Time: " << time << std::endl;
 
 	return 0;
 }
