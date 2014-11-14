@@ -175,226 +175,300 @@ void BBLSGraph::write(ostream &fout) {
 }
 
 bool BBLSGraph::simplify() {
-/**
-	bool anySimplified = false;
-	bool continueSimplifying = false;
-	int originalEntries = gateMap.size();
-
-	std::cout << std::endl << "Simplifying..." << std::endl;
-	do {
-		continueSimplifying = false;
-
-		std::cout << " -> Removing duplicates" << std::endl;
-		continueSimplifying |= removeDuplicates();
-		std::cout << " -> Simplifying gates" << std::endl;
-		continueSimplifying |= simplifyGates();
-		std::cout << " -> Removing unused" << std::endl;
-		continueSimplifying |= removeUnused();
-
-		if (continueSimplifying) {
-			anySimplified = true;
-			std::cout << "Went from " << originalEntries << " to " << gateMap.size() << " saving ";
-			std::cout << (originalEntries - gateMap.size()) << " entries." << std::endl;
-		}
-	} while (continueSimplifying);
-
-	return anySimplified;
-	*/
-	
 	int numProcesses;
 	MPI_Comm_size(MCW, &numProcesses);
-	numProcesses--;
-	
-	int bitSet = (1 << (numProcesses)) - 1;
 	
 	MPI_Status status;
 	Command command;
-	while(numProcesses > 0) {
-		MPI_Recv(&command, 1, MPI_ENUM, MPI_ANY_SOURCE, MPI_ANY_TAG, MCW, &status);
-		if(status.MPI_ERROR == 0) {
-			int source = status.MPI_SOURCE;
-			int tag = status.MPI_TAG;
-			if(command == REQUEST_DATA) {
-				if(bitSet & (1 << (source-1))) {
-					BBLSNode node;
-					node.type = AndGate;
-					node.output = 2;
-					node.inputLeft = source+2;
-					node.inputRight = source+5;
-					sendMessage(DATA, 1, source);
-					MPI_Send(&node, 1, mpi_nodeType, source, 1, MCW);
-					bitSet ^= (1 << (source-1));
-				} else {
-					sendMessage(END_PROCESS, source, source);
-					numProcesses--;
+	int numWorking = 0;
+	bool continueSimplifying = true;
+	bool anySimplified = false;
+    bool shutdownProcesses = false;
+    BBLSNode node;
+	map<unsigned int, BBLSNode*>::iterator itr;
+
+    double startTime = MPI_Wtime();
+    int originalEntries = gateMap.size();
+	do {
+        itr = gateMap.begin();
+        continueSimplifying = removeDuplicates();
+		do {
+			MPI_Recv(&command, 1, MPI_ENUM, MPI_ANY_SOURCE, MPI_ANY_TAG, MCW, &status);
+			if(status.MPI_ERROR == 0) {
+				int source = status.MPI_SOURCE;
+				int tag = status.MPI_TAG;
+				if(command == REQUEST_DATA) {
+                    if(shutdownProcesses) {
+                        itr = gateMap.end();
+                        sendMessage(END_PROCESS, 0, source);
+                        numProcesses--;
+					} else if(itr == gateMap.end()) {
+						sendMessage(NO_DATA, 0, source);
+					} else {
+                        node.output = itr->second->output;
+                        node.type = itr->second->type;
+                        node.inputLeft = itr->second->inputLeft;
+                        node.inputRight = itr->second->inputRight;
+                        sendMessage(DATA, 1, source);
+						MPI_Send(&node, 1, mpi_nodeType, source, 1, MCW);
+                        if(node.type != ConstantWire && node.type != VariableWire) {
+                           MPI_Send(gateMap[node.inputLeft],
+                           1, mpi_nodeType, source, 1, MCW);
+                            if(node.type != NotGate) {
+                                MPI_Send(gateMap[node.inputRight],
+                                1, mpi_nodeType, source, 1, MCW);
+                            }
+                        }
+						numWorking++;
+						itr++;
+					}
+				} else if(command == RESULT) {
+					if(tag == UPDATE_NODE) {
+						MPI_Recv(&node, 1, mpi_nodeType, source, MPI_ANY_TAG, MCW, &status);
+						if(status.MPI_ERROR == 0) {
+							continueSimplifying |= updateNode(node.output,
+                            node.type, node.inputLeft, node.inputRight);
+						}
+						numWorking--;
+					} else if(tag == REPLACE_INPUTS) {
+						unsigned int oldInput, newInput;
+						MPI_Recv(&oldInput, 1, MPI_UNSIGNED, source, MPI_ANY_TAG, MCW, &status);
+						MPI_Recv(&newInput, 1, MPI_UNSIGNED, source, MPI_ANY_TAG, MCW, &status);
+						continueSimplifying |= replaceInputs(oldInput, newInput);
+						numWorking--;
+					} else if (tag == NOCHANGE) {
+                        numWorking--;
+                    }
 				}
 			}
-		}
-	}
-	return true;
+		} while(itr != gateMap.end() || numWorking > 0);
+        continueSimplifying |= removeUnused();
+		anySimplified |= continueSimplifying;
+        if(!continueSimplifying) {
+            shutdownProcesses = true;
+        }
+	} while(numProcesses > 1);
+    double endTime = MPI_Wtime();
+    std::cout << "We went from " << originalEntries << " to " << gateMap.size()
+    << " in " << endTime - startTime << std::endl;
+	return anySimplified;
 }
 
-bool BBLSGraph::simplifyGates() {
-	bool somethingChanged = false;
-	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
-		BBLSNode* node = itr->second;
-		BBLSNode* left = NULL;
-		BBLSNode* right = NULL;
-		if (node->inputLeft != 0 && node->type != ConstantWire) {
-			if (!isUsed(node->inputLeft))
-				std::cout << node->output << " is using left " << node->inputLeft << " when it doesn't exist" << std::endl;
-			left = gateMap[node->inputLeft];
-		}
-		if (node->inputRight != 0) {
-			if (!isUsed(node->inputRight))
-				std::cout << node->output << " is using right " << node->inputRight << " when it doesn't exist" << std::endl;
-			right = gateMap[node->inputRight];
-		}
-
-		if (left != NULL && right == NULL) {
-			// ConstantWire and NotGate
-			if (node->type == NotGate) {
-				if (left->type == ConstantWire) {
-					// We can simplify this to the oposite of this constant
-					unsigned int newState = (left->inputLeft == 0 ? 1 : 0);
-					somethingChanged |= updateNode(node->output, ConstantWire, newState, 0);
-				}
-				else if (left->type == NotGate) {
-					somethingChanged |= replaceInputs(node->output, left->inputLeft);
-				}
+bool BBLSGraph::simplifyGate(BBLSNode* node, BBLSNode* left, BBLSNode* right) {
+	if (left != NULL && right == NULL) {
+		// ConstantWire and NotGate
+		if (node->type == NotGate) {
+			if (left->type == ConstantWire) {
+				// We can simplify this to the opposite of this constant
+				unsigned int newState = (left->inputLeft == 0 ? 1 : 0);
+				node->type = ConstantWire;
+				node->inputLeft = newState;
+				node->inputRight = 0;
+				return true;
 			}
-		}
-		else if (left != NULL && right != NULL) {
-			// And, Or, and Xor gates
-			if (node->type == AndGate) {
-				if (left->type == ConstantWire && right->type == ConstantWire) {
-					unsigned int newState = 0;
-					if (left->inputLeft == 1 && right->inputLeft == 1) {
-						newState = 1;
-					}
-					somethingChanged |= updateNode(node->output, ConstantWire, newState, 0);
-				}
-				else if (left->type == ConstantWire) {
-					if (left->inputLeft == 0) {
-						somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
-					}
-					else {
-						somethingChanged |= replaceInputs(node->output, node->inputRight);
-					}
-				}
-				else if (right->type == ConstantWire) {
-					if (right->inputLeft == 0) {
-						somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
-					}
-					else {
-						somethingChanged |= replaceInputs(node->output, node->inputLeft);
-					}
-				}
-				else if (node->inputLeft == node->inputRight) {
-					somethingChanged |= replaceInputs(node->output, node->inputLeft);
-				}
-				else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->inputLeft) {
-					somethingChanged |= updateNode(node->output, NotGate, left->inputLeft, 0);
-				}
-				else if (left->type == NotGate && right->type == VariableWire && left->inputLeft == right->output) {
-					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
-				}
-				else if (left->type == VariableWire && right->type == NotGate && left->output == right->inputLeft) {
-					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
-				}
-			}
-			else if (node->type == OrGate) {
-				if (left->type == ConstantWire && right->type == ConstantWire) {
-					unsigned int newState = 0;
-					if (left->inputLeft == 1 || right->inputLeft == 1) {
-						newState = 1;
-					}
-					somethingChanged |= updateNode(node->output, ConstantWire, newState, 0);
-				}
-				else if (left->type == ConstantWire) {
-					if (left->inputLeft == 0) {
-						somethingChanged |= replaceInputs(node->output, node->inputRight);
-					}
-					else {
-						somethingChanged |= updateNode(node->output, ConstantWire, 1, 0);
-					}
-				}
-				else if (right->type == ConstantWire) {
-					if (right->inputLeft == 0) {
-						somethingChanged |= replaceInputs(node->output, node->inputLeft);
-					}
-					else {
-						somethingChanged |= updateNode(node->output, ConstantWire, 1, 0);
-					}
-				}
-				else if (node->inputLeft == node->inputRight) {
-					somethingChanged |= replaceInputs(node->output, node->inputLeft);
-				}
-				else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->inputLeft) {
-					somethingChanged |= updateNode(node->output, NotGate, left->inputLeft, 0);
-				}
-				else if (left->type == NotGate && right->type == VariableWire && left->inputLeft == right->output) {
-					somethingChanged |= updateNode(node->output, ConstantWire, 1, 0);
-				}
-				else if (left->type == VariableWire && right->type == NotGate && left->output == right->inputLeft) {
-					somethingChanged |= updateNode(node->output, ConstantWire, 1, 0);
-				}
-			}
-			else if (node->type == XorGate) {
-				if (left->type == ConstantWire && right->type == ConstantWire) {
-					unsigned int newState = 0;
-					if (left->inputLeft != right->inputLeft) {
-						newState = 1;
-					}
-					somethingChanged |= updateNode(node->output, ConstantWire, newState, 0);
-				}
-				else if (left->type == ConstantWire) {
-					if (left->inputLeft == 0) {
-						somethingChanged |= replaceInputs(node->output, node->inputRight);
-					}
-					else {
-						somethingChanged |= updateNode(node->output, NotGate, node->inputRight, 0);
-					}
-				}
-				else if (right->type == ConstantWire) {
-					if (right->inputLeft == 0) {
-						somethingChanged |= replaceInputs(node->output, node->inputLeft);
-					}
-					else {
-						somethingChanged |= updateNode(node->output, NotGate, node->inputLeft, 0);
-					}
-				}
-				else if (node->inputLeft == node->inputRight) {
-					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
-				}
-				else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->inputLeft) {
-					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
-				}
-				else if (left->type == NotGate && right->type == VariableWire && left->inputLeft == right->output) {
-					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
-				}
-				else if (left->type == VariableWire && right->type == NotGate && left->output == right->inputLeft) {
-					somethingChanged |= updateNode(node->output, ConstantWire, 0, 0);
-				}
-				else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->output) {
-					somethingChanged |= updateNode(node->output, node->type, left->inputLeft, right->inputLeft);
-				}
+			else if (left->type == NotGate) {
+                node->output = left->inputLeft;
+                return true;
 			}
 		}
 	}
-	return somethingChanged;
+	else if (left != NULL && right != NULL) {
+		// And, Or, and Xor gates
+		if (node->type == AndGate) {
+			if (left->type == ConstantWire && right->type == ConstantWire) {
+				unsigned int newState = 0;
+				if (left->inputLeft == 1 && right->inputLeft == 1) {
+					newState = 1;
+				}
+				node->type = ConstantWire;
+				node->inputLeft = newState;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == ConstantWire) {
+				if (left->inputLeft == 0) {
+					node->type = ConstantWire;
+					node->inputLeft = 0;
+					node->inputRight = 0;
+				return true;
+				}
+				else {
+                    node->output = node->inputRight;
+                    return true;
+				}
+			}
+			else if (right->type == ConstantWire) {
+				if (right->inputLeft == 0) {
+					node->type = ConstantWire;
+					node->inputLeft = 0;
+					node->inputRight = 0;
+				return true;
+				}
+				else {
+                    node->output = node->inputLeft;
+                    return true;
+				}
+			}
+			else if (node->inputLeft == node->inputRight) {
+                node->output = node->inputLeft;
+                return true;
+			}
+			else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->inputLeft) {
+				node->type = NotGate;
+				node->inputLeft = left->inputLeft;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == NotGate && right->type == VariableWire && left->inputLeft == right->output) {
+				node->type = ConstantWire;
+				node->inputLeft = 0;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == VariableWire && right->type == NotGate && left->output == right->inputLeft) {
+				node->type = ConstantWire;
+				node->inputLeft = 0;
+				node->inputRight = 0;
+				return true;
+			}
+		}
+		else if (node->type == OrGate) {
+			if (left->type == ConstantWire && right->type == ConstantWire) {
+				unsigned int newState = 0;
+				if (left->inputLeft == 1 || right->inputLeft == 1) {
+					newState = 1;
+				}
+				node->type = ConstantWire;
+				node->inputLeft = newState;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == ConstantWire) {
+				if (left->inputLeft == 0) {
+                    node->output = node->inputRight;
+                    return true;
+				}
+				else {
+					node->type = ConstantWire;
+				    node->inputLeft = 1;
+				    node->inputRight = 0;
+				    return true;
+				}
+			}
+			else if (right->type == ConstantWire) {
+				if (right->inputLeft == 0) {
+                    node->output = node->inputLeft;
+                    return true;
+				}
+				else {
+					node->type = ConstantWire;
+					node->inputLeft = 1;
+					node->inputRight = 0;
+				    return true;
+				}
+			}
+			else if (node->inputLeft == node->inputRight) {
+				node->output = node->inputLeft;
+				return true;
+			}
+			else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->inputLeft) {
+				node->type = NotGate;
+				node->inputLeft = left->inputLeft;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == NotGate && right->type == VariableWire && left->inputLeft == right->output) {
+				node->type = ConstantWire;
+				node->inputLeft = 1;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == VariableWire && right->type == NotGate && left->output == right->inputLeft) {
+				node->type = ConstantWire;
+				node->inputLeft = 1;
+				node->inputRight = 0;
+				return true;
+			}
+		}
+		else if (node->type == XorGate) {
+			if (left->type == ConstantWire && right->type == ConstantWire) {
+				unsigned int newState = 0;
+				if (left->inputLeft != right->inputLeft) {
+					newState = 1;
+				}
+				node->type = ConstantWire;
+				node->inputLeft = newState;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == ConstantWire) {
+				if (left->inputLeft == 0) {
+					node->output = node->inputRight;
+					return true;
+				}
+				else {
+					node->type = NotGate;
+				    node->inputLeft = node->inputRight;
+				    node->inputRight = 0;
+				    return true;
+				}
+			}
+			else if (right->type == ConstantWire) {
+				if (right->inputLeft == 0) {
+					node->output = node->inputLeft;
+					return true;
+				}
+				else {
+					node->type = NotGate;
+				    node->inputLeft = node->inputLeft;
+				    node->inputRight = 0;
+				    return true;
+				}
+			}
+			else if (node->inputLeft == node->inputRight) {
+				node->type = ConstantWire;
+				node->inputLeft = 0;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->inputLeft) {
+				node->type = ConstantWire;
+				node->inputLeft = 0;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == NotGate && right->type == VariableWire && left->inputLeft == right->output) {
+				node->type = ConstantWire;
+				node->inputLeft = 0;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == VariableWire && right->type == NotGate && left->output == right->inputLeft) {
+				node->type = ConstantWire;
+				node->inputLeft = 0;
+				node->inputRight = 0;
+				return true;
+			}
+			else if (left->type == NotGate && right->type == NotGate && left->inputLeft == right->output) {
+				node->type = node->type;
+				node->inputLeft = left->inputLeft;
+				node->inputRight = right->inputLeft;
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 bool BBLSGraph::updateNode(unsigned int output, NodeType type, unsigned int inputLeft, unsigned int inputRight) {
     map<unsigned int, BBLSNode*>::iterator found = gateMap.find(output);
-	BBLSNode* node;
-	bool result = false;
-	if (found == gateMap.end()) {
-		node = createNode(output, type);
-		result = true;
-	}
-	else {
-		node = found->second;
+    BBLSNode* node;
+    bool result = false;
+    if (found == gateMap.end()) {
+        node = createNode(output, type);
+        result = true;
+    } else {
+        node = found->second;
 		result = node->type != type || node->inputLeft != inputLeft || node->inputRight != inputRight;
 
 		if (node->type != ConstantWire && node->type != VariableWire) {
@@ -424,6 +498,12 @@ bool BBLSGraph::replaceInputs(unsigned int oldInput, unsigned int newInput) {
 	for (map<unsigned int, BBLSNode*>::iterator itr = gateMap.begin(); itr != gateMap.end(); itr++) {
 		BBLSNode* node = itr->second;
 		if (node->type != ConstantWire && node->type != VariableWire) {
+            if(node->output == oldInput) {
+                reduceUsed(node->inputLeft);
+                if(node->type != NotGate) {
+                    reduceUsed(node->inputRight);
+                }
+            }
 
 			if (node->inputLeft == oldInput) {
 				reduceUsed(oldInput);
@@ -556,29 +636,55 @@ void BBLSGraph::solveThread(int root) {
 	
 	Command command;
 	MPI_Status status;
+    BBLSNode* node = new BBLSNode;
+    BBLSNode* left = NULL;
+    BBLSNode* right = NULL;
 	do {
 		sendMessage(REQUEST_DATA, root, START_PROCESS);
 		MPI_Recv(&command, 1, MPI_ENUM, root, MPI_ANY_TAG, MCW, &status);
 		if(status.MPI_ERROR == 0) {
 			int source = status.MPI_SOURCE;
 			int tag = status.MPI_TAG;
-			if(command == DATA) {
-				int count = tag;
-				// Create buffer large enough to hold all of it. 3 * count BBLSNode
-				//BBLSNode* nodes = new BBLSNode[3 * count];
+			if(command == DATA) { 
+				MPI_Recv(node, 1, mpi_nodeType, root, MPI_ANY_TAG, MCW, &status);
 				
-				//MPI_Recv(nodes, 3 * count, 
-				BBLSNode node;
-				MPI_Recv(&node, 1, mpi_nodeType, root, MPI_ANY_TAG, MCW, &status);
+                if(node->type != ConstantWire && node->type != VariableWire) {
+                    left = new BBLSNode;
+                    MPI_Recv(left, 1, mpi_nodeType, root, MPI_ANY_TAG, MCW, &status);
+                    if(node->type != NotGate) {
+                        right = new BBLSNode;
+                        MPI_Recv(right, 1, mpi_nodeType, root, MPI_ANY_TAG, MCW, &status);
+                    }
+                }
+                unsigned int oldInput = node->output;
+				
 				if(status.MPI_ERROR == 0) {
-					std::cout << pid << " got: " << node.type << " (" << node.output << ", "
-							<< node.inputLeft << ", " << node.inputRight << ")" << std::endl;
+                    bool result = simplifyGate(node, left, right);
+                    if(result) {
+                        if(node->output == oldInput) {
+                            sendMessage(RESULT, UPDATE_NODE);
+                            MPI_Send(node, 1, mpi_nodeType, root, 1, MCW);
+                        } else {
+                            sendMessage(RESULT, REPLACE_INPUTS);
+                            MPI_Send(&oldInput, 1, MPI_UNSIGNED, root, 1, MCW);
+                            MPI_Send(&(node->output), 1, MPI_UNSIGNED, root, 1, MCW);
+                        }
+                    } else {
+                        sendMessage(RESULT, NOCHANGE);
+                    }
 				}
-				
-				//delete [] nodes;
 			}
 		}
+        if(left != NULL) {
+            delete left;
+            left = NULL;
+        }
+        if(right != NULL) {
+            delete right;
+            right = NULL;
+        }
 	} while(command != END_PROCESS);
+    delete node;
 }
 
 void BBLSGraph::createDatatypes() {

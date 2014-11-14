@@ -1,6 +1,7 @@
 #pragma once
 
 #include<algorithm>
+#include<string>
 #include<iostream>
 #include<map>
 #include<mpi.h>
@@ -28,7 +29,15 @@ enum Command {
 	START_PROCESS,
 	REQUEST_DATA,
 	DATA,
+	NO_DATA,
+	RESULT,
 	END_PROCESS
+};
+
+enum DataTag {
+	UPDATE_NODE,
+	REPLACE_INPUTS,
+    NOCHANGE
 };
 
 struct BBLSNode{
@@ -81,7 +90,7 @@ private:
 	static void createDatatypes();
 
 	static BBLSNode* createNode(unsigned int key, NodeType type);
-	bool simplifyGates();
+    static bool simplifyGate(BBLSNode*, BBLSNode*, BBLSNode*);
 	bool removeUnused();
 	bool removeDuplicates();
 	bool renumber();

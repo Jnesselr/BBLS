@@ -28,8 +28,7 @@ int main(int argc, char* argv[]) {
     	ifstream fin;
 	    do {
     		cout << "File name: ";
-		    //cin >> fileName;
-			fileName = "test.txt";
+		    cin >> fileName;
 	    	fin.open(fileName.c_str());
     		if (fin.fail()) {
 			    cout << "I'm sorry, that wasn't a valid name" << endl << endl;
@@ -42,8 +41,7 @@ int main(int argc, char* argv[]) {
 
     	ofstream fout;
     	cout << "Output file name: ";
-		fileName = "out.txt";
-    	//cin >> fileName;
+    	cin >> fileName;
 
     	graph.simplify();
 
